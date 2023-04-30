@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="manifest" href="/manifest.json" />
+    <title>Speech Recognition and Text to Speech with Translation</title>
+    <style>
+      body {
+        text-align: center;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>TERJEMAH JEPANG-INDONESIA</h1>
+    <p>Klik tombol di bawah ini dan mulai bicara:</p>
+    <div>
+      <button id="start-recognition-btn">Mulai</button>
+      <button id="switch-language-btn">Jepang - Indonesia</button>
+    </div>
+
+    <p>Mulai bicara dan tulisan akan muncul di bawah:</p>
+    <p id="transcript"></p>
+
+    <p>Hasil dari terjemahan:</p>
+    <p id="translation"></p>
+
+    <p>History:</p>
+    <ul id="history"></ul>
+
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.4/jquery.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/axios@0.12.0/dist/axios.min.js"></script>
+    <script>
+      if ("serviceWorker" in navigator) {
+        navigator.serviceWorker.register("/serviceworker.js");
+      }
+
+      let recognition = new window.webkitSpeechRecognition();
+      let startBtn = document.querySelector("#start-recognition-btn");
+      let transcript = document.querySelector("#transcript");
+      let synth = window.speechSynthesis;
+      let targetLanguage = "id";
+      let recognitionLanguage = "ja-JP";
+      let historyList = document.querySelector("#history");
+
+      recognition.lang = recognitionLanguage;
+
+      startBtn.addEventListener("click", () => {
+        recognition.start();
+      });
+
+      let switchBtn = document.querySelector("#switch-language-btn");
+
+      switchBtn.addEventListener("click", () => {
+        if (targetLanguage === "id") {
+          targetLanguage = "ja";
+          recognitionLanguage = "id-ID";
+          switchBtn.textContent = "Indonesia - Jepang";
+        } else {
+          targetLanguage = "id";
+          recognitionLanguage = "ja-JP";
+          switchBtn.textContent = "Jepang - Indonesia";
+        }
+        recognition.lang = recognitionLanguage;
+        transcript.textContent = "";
+        document.querySelector("#translation").textContent = "";
+      });
+
+      recognition.addEventListener("result", async (e) => {
+        const resultIndex = e.resultIndex;
+        const transcriptText = e.results[resultIndex][0].transcript;
+
+        transcript.textContent = transcriptText;
+
+        const utterance = new SpeechSynthesisUtterance(transcriptText);
+        utterance.lang = recognitionLanguage; // set bahasa yang akan diucapkan menjadi bahasa Jepang
+        synth.speak(utterance);
+
+        // new post data
+        try {
+          const postVoice = await axios({
+            url: "http://localhost:3000/translate",
+            method: "POST",
+            data: {
+              q: transcriptText,
+              target: targetLanguage,
+            },
+          });
+
+          if (postVoice.status === 200) {
+            const translationText = postVoice.data.translation;
+            const translationElement = document.querySelector("#translation");
+
+            translationElement.textContent = translationText;
+            const utteranceTranslation = new SpeechSynthesisUtterance(
+              translationText
+            );
+
+            const historyItem = document.createElement("li");
+      historyItem.textContent = `${recognitionLanguage} -> ${targetLanguage}: ${transcriptText} -> ${translationText}`;
+      historyList.appendChild(historyItem);
+
+            utteranceTranslation.lang = targetLanguage;
+            synth.speak(utteranceTranslation);
+          }
+        } catch (error) {
+          console.log("Failed to send AJAX request", error);
+        }
+      });
+
+     
+    </script>
+  </body>
+</html>
